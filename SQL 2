@@ -1,0 +1,47 @@
+-- MAX,MIN, ROUND, AVG
+SELECT [Maximum Price] = MAX(FishPrice),
+		[Minimum Price] = MIN(FishPrice),
+		[Average Price] = ROUND(AVG(FishPrice),1)
+FROM MsFish
+
+--CONCAT, ROUND, AVG
+SELECT FishTypeName,
+[Average Price] = CONCAT('$', ROUND(AVG(FishPrice), 1))
+FROM MsFish AS MF JOIN MsFishType AS MFT
+ON MF.FishTypeID = MFT.FishTypeID
+GROUP BY FishTypeName
+
+--COUNT, LEFT, NOT IN
+SELECT FishermanName,
+COUNT(TransactionDate)
+FROM MsFisherman AS MF JOIN TransactionHeader AS TH
+ON MF.FishermanID = TH.FishermanID
+WHERE FishermanName NOT IN ('C', 'D')
+GROUP BY FishermanName
+
+--MONTH, COUNT, YEAR
+SELECT MONTH(TransactionDate),
+		TransactionDate,
+		COUNT(TransactionDate)
+FROM TransactionHeader
+WHERE YEAR(TransactionDate) = 2020
+GROUP BY MONTH(TransactionDate) 
+
+SELECT FishTypeName, 
+[Total Fish Variant] = COUNT(FishID)
+FROM MsFishType AS MFT
+JOIN MsFish AS MF ON MFT.FishTypeID = MF.FishTypeID
+GROUP BY FishTypeName
+ORDER BY FishTypeName DESC
+-- atau -> ORDER BY COUNT(FishID) DESC
+
+--MONTH, CAST, SUM, YEAR
+SELECT [Month] = MONTH(TransactionDate),
+		[Total Monthly Revenue] = '$' + CAST(SUM(FishPrice * Quantity)AS VARCHAR)
+FROM MsFish AS MF JOIN TransactionDetail AS TD
+ON MF.FishID = TD.FishID
+JOIN TransactionHeader AS TH
+ON TH.TransactionID = TD.TransactionID
+WHERE YEAR(TransactionDate) = 2020
+GROUP BY MONTH(TransactionDate)
+HAVING SUM(FishPrice * Quantity) >= 600
