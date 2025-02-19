@@ -1,0 +1,210 @@
+CREATE DATABASE [RoCALink]
+GO
+
+USE [RoCALink]
+GO
+
+-- Table Creation
+CREATE TABLE [MsStaff] ( --name, email, phone number, gender, and salary
+	StaffID CHAR(5) PRIMARY KEY CHECK (StaffID LIKE 'ST[0-9][0-9][0-9]') NOT NULL ,
+	StaffName VARCHAR(50) CHECK (LEN (StaffName) > 4) NOT NULL, 
+	StaffEmail VARCHAR(50) CHECK (StaffEmail LIKE '%@rocalink.com') NOT NULL,
+	StaffPhoneNumber VARCHAR(50) CHECK (StaffPhoneNumber LIKE '08%') NOT NULL,
+	StaffGender VARCHAR(50) CHECK (StaffGender LIKE 'Male' OR StaffGender LIKE 'Female') NOT NULL,
+	StaffSalary INT NOT NULL
+)
+
+
+CREATE TABLE [BikeType] ( --type name
+	BikeTypeID CHAR(5) PRIMARY KEY CHECK (BikeTypeID LIKE 'BT[0-9][0-9][0-9]') NOT NULL,
+	BikeTypeName VARCHAR(50) NOT NULL
+)
+
+
+CREATE TABLE [BikeBrand] ( -- brand name, description, website, and nationality
+	BrandID CHAR(5) PRIMARY KEY CHECK (BrandID LIKE 'BR[0-9][0-9][0-9]'),  
+	BrandName VARCHAR(60) NOT NULL,
+	Description VARCHAR(255),
+	Website VARCHAR(50) CHECK (Website LIKE 'www.%'),
+	Nationality VARCHAR(50)
+)
+
+
+CREATE TABLE [BikeGroupset] ( --name, number of gears, and has info on its wireless capability
+	GroupsetID CHAR(5) PRIMARY KEY CHECK (GroupsetID LIKE 'GR[0-9][0-9][0-9]') NOT NULL,
+	GroupsetName VARCHAR(50) NOT NULL,
+	[Number Of Gears] INT CHECK([Number Of Gears] BETWEEN 4 AND 12) NOT NULL,
+	[Wireless Capability] VARCHAR(50) CHECK ([Wireless Capability] LIKE 'True' OR [Wireless Capability] LIKE 'False') NOT NULL
+) 
+
+
+CREATE TABLE [MsBike] ( --name and price
+	BikeID CHAR(5) PRIMARY KEY CHECK (BikeID LIKE 'BK[0-9][0-9][0-9]') NOT NULL,
+	BikeTypeID CHAR(5) FOREIGN KEY REFERENCES BikeType(BikeTypeID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+	BrandID CHAR(5) FOREIGN KEY REFERENCES BikeBrand(BrandID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+	GroupsetID CHAR(5) FOREIGN KEY REFERENCES BikeGroupset(GroupsetID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+	BikeName VARCHAR(50) NOT NULL,
+	BikePrice INT CHECK(BikePrice > 0) NOT NULL
+)
+
+
+CREATE TABLE [MsCustomer] ( --name, phone number, gender, and email
+    CustomerID CHAR(5) PRIMARY KEY CHECK (CustomerID LIKE 'CU[0-9][0-9][0-9]'),
+    CustomerName VARCHAR(50) CHECK (LEN (CustomerName) > 4) NOT NULL,
+    CustomerPhoneNumber VARCHAR(50) CHECK (CustomerPhoneNumber LIKE '08%') NOT NULL,
+    CustomerGender VARCHAR(50) CHECK (CustomerGender LIKE 'MALE' OR CustomerGender LIKE 'FEMALE') NOT NULL,
+    CustomerEmail VARCHAR(50) CHECK (CustomerEmail LIKE '%@gmail.com')
+)
+
+
+CREATE TABLE [TransactionHeader] ( -- transaction date
+	TransactionID CHAR(5) PRIMARY KEY CHECK (TransactionID LIKE 'TR[0-9][0-9][0-9]'),
+	CustomerID CHAR(5)  FOREIGN KEY REFERENCES MsCustomer(CustomerID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+	StaffID CHAR(5)  FOREIGN KEY REFERENCES MsStaff(StaffID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+	TransactionDate DATETIME CHECK (TransactionDate < GETDATE()) NOT NULL
+)
+
+
+CREATE TABLE [TransactionDetail] ( -- quantity
+ TransactionID CHAR(5) FOREIGN KEY REFERENCES TransactionHeader(TransactionID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+ BikeID CHAR(5) FOREIGN KEY REFERENCES MsBike(BikeID) ON UPDATE CASCADE ON DELETE CASCADE NOT NULL,
+ Quantity INT NOT NULL,
+ PRIMARY KEY(TransactionID, BikeID)
+)
+
+
+CREATE TABLE [MsSeller] (
+	SellerID CHAR(5) PRIMARY KEY CHECK (SellerID LIKE 'SL[0-9][0-9][0-9]'),
+    SellerName VARCHAR(255) NOT NULL,
+    SellerPhoneNumber VARCHAR(15) CHECK (SellerPhoneNumber LIKE '08%') NOT NULL,
+    SellerEmail VARCHAR(255) CHECK (SellerEmail LIKE '%@gmail.com') NOT NULL,
+	SellerAddress VARCHAR(255) NOT NULL
+
+)
+
+
+CREATE TABLE [MsShipping] (
+	ReceiptID CHAR(5) PRIMARY KEY CHECK (ReceiptID LIKE 'RC[0-9][0-9][0-9]'),
+	LogisticName VARCHAR(255) NOT NULL,
+	CourierName VARCHAR (255) NOT NULL
+)
+
+
+-- Select
+SELECT 
+    bg.GroupsetID,
+    GroupsetName,
+    [Bike Count] = COUNT(GroupsetName),
+    [Average Price] = CONVERT(varchar(50), CONCAT('Rp.', AVG(BikePrice))) ,
+    BrandName
+FROM BikeGroupset bg JOIN MsBike mb 
+ON bg.GroupsetID = mb.GroupsetID JOIN BikeBrand bb 
+ON bb.BrandID = mb.BrandID 
+WHERE BrandName LIKE 'C%' 
+GROUP BY bg.GroupsetID, GroupsetName, BrandName, BikePrice
+    HAVING AVG(BikePrice) > 150000000
+
+SELECT DISTINCT
+    th.TransactionID,
+    mc.CustomerName,
+    ms.StaffName,
+    [Transaction Day] = DATENAME(WEEKDAY, TransactionDate)
+FROM TransactionHeader th JOIN MsCustomer mc 
+ON mc.CustomerID = th.CustomerID JOIN MsStaff ms 
+ON ms.StaffID = th.StaffID JOIN TransactionDetail td 
+ON td.TransactionID = th.TransactionID JOIN MsBike mb 
+ON mb.BikeID = td.BikeID 
+WHERE DATEPART(DAY, TransactionDate) IN(
+    SELECT
+        TransactionDate = DATEPART(DAY, TransactionDate)
+  FROM TransactionHeader
+  WHERE MONTH(TransactionDate) = 2 AND StaffSalary > (
+        SELECT 
+            StaffSalary = AVG(StaffSalary)
+   FROM MsStaff
+    )
+)
+
+SELECT 
+    StaffName,
+    BikeName,
+    th.TransactionID,
+    [Transaction Month] = MONTH(TransactionDate)
+FROM TransactionHeader th JOIN TransactionDetail td 
+ON td.TransactionID = th.TransactionID JOIN MsBike mb
+ON mb.BikeID = td.BikeID JOIN MsStaff ms 
+ON ms.StaffID = th.StaffID 
+WHERE MONTH(TransactionDate) IN (
+    SELECT 
+        Quantity = MAX(Quantity)
+    FROM TransactionDetail td JOIN TransactionHeader th
+    ON td.TransactionID = th.TransactionID
+    WHERE Quantity IN (
+        SELECT 
+    TransactionDate = DATEPART(QUARTER, DATEDIFF(DAY,TransactionDate, 12))
+FROM TransactionHeader
+    )
+    GROUP BY Quantity
+)
+
+SELECT [Average Bikes Sold] = CONCAT (AVG (Quantity), ' Bikes')
+FROM MsBike b Join TransactionDetail td 
+ON b.BikeId = td.BikeId Join TransactionHeader th 
+ON th.TransactionId = td.TransactionId,
+(
+ SELECT sq =  DATEADD (YEAR, -1, GETDATE())  
+ FROM TransactionHeader th
+) 
+AS a 
+WHERE BikePrice BETWEEN 100000000 AND 150000000 
+AND TransactionDate < a.sq
+
+
+SELECT [Max Bikes Purchased] = CONCAT (MAX (Quantity), ' Bikes')
+FROM MsBike b JOIN TransactionDetail td
+ON b.BikeID = td.BikeID JOIN TransactionHeader th
+ON th.TransactionID = td.TransactionID,
+(
+ SELECT sq = MONTH (TransactionDate) 
+ FROM TransactionHeader
+)
+AS a
+WHERE b.BikeName LIKE 'S%' 
+AND a.sq BETWEEN 7 AND 12
+
+-- Create View
+CREATE VIEW CustomerView 
+AS
+SELECT  
+	 CustomerName,
+	 [Total Transactions] = COUNT(DISTINCT TD.BikeID),
+	 [Total Bikes Bought] = SUM(Quantity),
+	 [Customer Phone] = STUFF(CustomerPhoneNumber,1,1,'+62')
+
+FROM MsCustomer MC JOIN TransactionHeader TH
+ON MC.CustomerID = TH.CustomerID
+JOIN TransactionDetail TD
+ON TH.TransactionID = TD.TransactionID
+GROUP BY CustomerName, STUFF(CustomerPhoneNumber,1,1,'+62')
+HAVING COUNT(DISTINCT TD.BikeID) BETWEEN 2 AND 5 AND SUM(Quantity) > 5
+
+SELECT * FROM CustomerView
+DROP VIEW CustomerView
+
+
+CREATE VIEW TransactionView
+AS
+SELECT 
+	TD.TransactionID, 
+	[Max Qty] = MAX(Quantity), 
+	[Min Qty] = MIN(Quantity),
+	[Day Elapsed] = DATEDIFF(Day, TransactionDate, GETDATE())
+FROM TransactionHeader TH JOIN TransactionDetail TD 
+ON TH.TransactionID = TD.TransactionID 
+JOIN MsStaff MS 
+ON MS.StaffID = TH.StaffID
+WHERE StaffGender = 'Male'
+GROUP BY TD.TransactionID, DATEDIFF(Day, TransactionDate, GETDATE())
+HAVING  MAX(Quantity) != MIN(Quantity)
+
+SELECT * FROM TransactionView
